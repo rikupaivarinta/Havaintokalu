@@ -558,7 +558,7 @@ async function openSites() {
 }
 $('newSiteBtn').addEventListener('click', createSite);
 async function createSite() {
-  const r = await askFields('Uusi kohde', [{ key: 'name', label: 'Kohteen nimi', placeholder: 'esim. Kämpin päiväkoti, Et. Rautatiekatu 14', required: true }], 'Luo kohde');
+  const r = await askFields('Uusi kohde', [{ key: 'name', label: 'Kohteen nimi', placeholder: 'Kohde, osoite', required: true }], 'Luo kohde');
   if (!r || !r.name) return;
   const site = { id: uid(), name: r.name, created: Date.now() };
   await dbPut('sites', site);
