@@ -1,0 +1,276 @@
+<!DOCTYPE html>
+<html lang="fi">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
+<meta name="theme-color" content="#141c26" />
+<link rel="manifest" href="manifest.json" />
+<link rel="apple-touch-icon" href="icons/icon-192.png" />
+<title>Havaintokartta</title>
+<style>
+  :root{
+    --bg:#eef0f3; --panel:#ffffff; --ink:#141c26; --ink-soft:#5a6675;
+    --line:#d6dbe2; --header:#141c26; --header-ink:#f4f6f8; --accent:#E4572E;
+    --ok:#1f8a4c; --danger:#c0392b; --shadow:0 6px 24px rgba(20,28,38,.18);
+    --safe-b:env(safe-area-inset-bottom,0px); --safe-t:env(safe-area-inset-top,0px);
+  }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  html,body{height:100%;margin:0}
+  body{
+    font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+    color:var(--ink);background:var(--bg);overflow:hidden;
+    display:flex;flex-direction:column;height:100dvh;
+  }
+  .mono{font-family:ui-monospace,"SF Mono",Menlo,Consolas,monospace;font-variant-numeric:tabular-nums}
+  button{font-family:inherit;font-size:1rem;cursor:pointer;border:none;background:none;color:inherit}
+  .btn{padding:.7rem 1rem;border-radius:10px;font-weight:600;display:inline-flex;align-items:center;gap:.45rem;line-height:1}
+  .btn-primary{background:var(--accent);color:#fff}
+  .btn-ghost{background:#eceff3;color:var(--ink)}
+  .btn-dark{background:#26323f;color:#fff}
+  .btn:active{transform:translateY(1px)}
+  .btn[disabled]{opacity:.45;pointer-events:none}
+
+  header{
+    background:var(--header);color:var(--header-ink);
+    padding:calc(.55rem + var(--safe-t)) .7rem .55rem;display:flex;align-items:center;gap:.5rem;flex:0 0 auto;
+  }
+  header .title{font-weight:800;letter-spacing:.3px;font-size:1.05rem;white-space:nowrap}
+  header .title small{display:block;font-weight:500;font-size:.66rem;color:#9fb0c2;letter-spacing:.5px;text-transform:uppercase}
+  header .sitename{flex:1;min-width:0;font-weight:600;font-size:.92rem;color:#cdd8e3;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;text-align:right}
+  .hbtn{width:42px;height:42px;border-radius:10px;background:#26323f;display:grid;place-items:center;font-size:1.2rem;flex:0 0 auto}
+  .hbtn:active{background:#34424f}
+
+  .planbar{display:flex;gap:.4rem;overflow-x:auto;padding:.5rem .6rem;background:#dfe3e9;border-bottom:1px solid var(--line);flex:0 0 auto;scrollbar-width:none}
+  .planbar::-webkit-scrollbar{display:none}
+  .plantab{padding:.5rem .8rem;border-radius:999px;background:#fff;border:1px solid var(--line);font-size:.85rem;font-weight:600;white-space:nowrap;color:var(--ink-soft)}
+  .plantab.active{background:var(--ink);color:#fff;border-color:var(--ink)}
+  .plantab.add{background:transparent;border-style:dashed;color:var(--accent);border-color:var(--accent)}
+
+  #stage{flex:1;position:relative;overflow:hidden;background:#cfd5dd;touch-action:none}
+  #viewport{position:absolute;inset:0;overflow:hidden}
+  #world{position:absolute;top:0;left:0;width:100%;transform-origin:0 0;will-change:transform}
+  #planImg{display:block;width:100%;height:auto;user-select:none;-webkit-user-drag:none;pointer-events:none}
+  .marker{
+    position:absolute;transform:translate(-50%,-50%);min-width:30px;height:30px;padding:0 6px;
+    border-radius:999px;color:#fff;font-weight:800;font-size:13px;display:grid;place-items:center;
+    box-shadow:0 1px 4px rgba(0,0,0,.45);border:2px solid #fff;white-space:nowrap
+  }
+  .marker.sel{outline:3px solid #141c26;outline-offset:1px;z-index:5}
+  #crosshair{position:absolute;width:46px;height:46px;transform:translate(-50%,-50%);z-index:20;display:none;pointer-events:none}
+  #crosshair::before,#crosshair::after{content:"";position:absolute;background:var(--accent)}
+  #crosshair::before{left:50%;top:0;width:2px;height:100%;margin-left:-1px}
+  #crosshair::after{top:50%;left:0;height:2px;width:100%;margin-top:-1px}
+  #crosshair .ring{position:absolute;inset:9px;border:3px solid var(--accent);border-radius:50%}
+
+  .zoomctl{position:absolute;right:10px;bottom:calc(96px + var(--safe-b));display:flex;flex-direction:column;gap:8px;z-index:15}
+  .zoomctl button{width:46px;height:46px;border-radius:12px;background:#fff;box-shadow:var(--shadow);font-size:1.4rem;font-weight:700;display:grid;place-items:center}
+  .zoomctl button.fit{font-size:.7rem;font-weight:700}
+
+  .emptystate{position:absolute;inset:0;display:grid;place-items:center;text-align:center;padding:2rem;color:var(--ink-soft)}
+  .emptystate .inner{max-width:320px}
+  .emptystate h2{color:var(--ink);margin:.2rem 0 .6rem}
+
+  .fab-list{position:absolute;left:10px;bottom:calc(20px + var(--safe-b));z-index:15;
+    background:#fff;box-shadow:var(--shadow);border-radius:12px;padding:.7rem 1rem;font-weight:700;display:flex;gap:.5rem;align-items:center}
+  .fab-list .count{background:var(--accent);color:#fff;border-radius:999px;padding:.05rem .5rem;font-size:.8rem}
+
+  /* Bottom sheet */
+  .sheet-bg{position:fixed;inset:0;background:rgba(20,28,38,.45);z-index:40;display:none}
+  .sheet-bg.open{display:block}
+  .sheet{position:fixed;left:0;right:0;bottom:0;background:var(--panel);z-index:41;
+    border-radius:18px 18px 0 0;box-shadow:var(--shadow);transform:translateY(100%);transition:transform .22s ease;
+    max-height:90dvh;display:flex;flex-direction:column;padding-bottom:var(--safe-b)}
+  .sheet.open{transform:translateY(0)}
+  .sheet .grab{width:42px;height:5px;border-radius:3px;background:var(--line);margin:.6rem auto .2rem}
+  .sheet .body{overflow:auto;padding:.4rem 1.1rem 1.1rem}
+  .sheet h3{margin:.4rem 0 .8rem;font-size:1.15rem}
+  .row{display:flex;gap:.5rem;align-items:center}
+  label.fld{display:block;font-size:.78rem;font-weight:700;color:var(--ink-soft);text-transform:uppercase;letter-spacing:.4px;margin:.8rem 0 .35rem}
+  textarea,input[type=text]{width:100%;font:inherit;font-size:1rem;padding:.7rem;border:1.5px solid var(--line);border-radius:10px;background:#fbfcfd;color:var(--ink)}
+  textarea{min-height:96px;resize:vertical}
+  .catgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(96px,1fr));gap:.5rem}
+  .catpick{padding:.6rem .4rem;border-radius:12px;border:2px solid var(--line);background:#fff;text-align:center;font-weight:700;font-size:.82rem;display:flex;flex-direction:column;align-items:center;gap:.35rem}
+  .catpick .dot{width:26px;height:26px;border-radius:50%;display:grid;place-items:center;color:#fff;font-size:.7rem;font-weight:800}
+  .catpick.sel{border-color:var(--ink);background:#f4f6f8}
+  .sheet-actions{display:flex;gap:.6rem;margin-top:1rem}
+  .sheet-actions .btn{flex:1;justify-content:center}
+
+  .listgroup{margin-bottom:1.1rem}
+  .listgroup .ghead{display:flex;align-items:center;gap:.5rem;font-weight:800;margin:0 0 .5rem;font-size:.95rem}
+  .swatch{width:18px;height:18px;border-radius:5px;flex:0 0 auto}
+  .item{display:flex;gap:.6rem;align-items:flex-start;padding:.6rem .2rem;border-bottom:1px solid var(--line)}
+  .item .code{min-width:46px;height:26px;border-radius:7px;color:#fff;font-weight:800;font-size:.8rem;display:grid;place-items:center;flex:0 0 auto}
+  .item .txt{flex:1;min-width:0;font-size:.92rem;line-height:1.35}
+  .item .txt .date{display:block;font-size:.7rem;color:var(--ink-soft);margin-top:.15rem}
+  .item .go{color:var(--ink-soft);font-size:1.2rem;padding:.2rem .3rem}
+
+  .catrow{display:flex;align-items:center;gap:.6rem;padding:.55rem .2rem;border-bottom:1px solid var(--line)}
+  .catrow .dot{width:30px;height:30px;border-radius:8px;color:#fff;font-weight:800;font-size:.72rem;display:grid;place-items:center;flex:0 0 auto}
+  .catrow .meta{flex:1;min-width:0}
+  .catrow .meta b{display:block;font-size:.92rem}
+  .catrow .meta span{font-size:.74rem;color:var(--ink-soft)}
+  .catrow input[type=color]{width:38px;height:34px;border:none;background:none;padding:0}
+  .iconbtn{padding:.45rem .55rem;border-radius:8px;background:#eceff3;font-size:1rem}
+
+  .help p{line-height:1.5;color:#33414f}
+  .help ol{line-height:1.55;padding-left:1.2rem}
+  .badge-tip{background:#fff4ef;border:1px solid #f3c4b3;border-radius:10px;padding:.7rem .8rem;font-size:.85rem;color:#8a3b22;margin:.6rem 0}
+  .hidden{display:none!important}
+  .center{text-align:center}
+  .muted{color:var(--ink-soft);font-size:.85rem}
+  input[type=file]{display:none}
+
+  /* generic modal (replaces native prompt/confirm/alert) */
+  .modal-bg{position:fixed;inset:0;background:rgba(20,28,38,.5);z-index:70;display:none;align-items:center;justify-content:center;padding:1.2rem}
+  .modal-bg.open{display:flex}
+  .modal{background:#fff;border-radius:16px;box-shadow:var(--shadow);width:100%;max-width:420px;padding:1.2rem 1.2rem 1rem}
+  .modal h3{margin:.1rem 0 .8rem;font-size:1.1rem}
+  .modal .mmsg{color:#33414f;line-height:1.45;margin:.2rem 0 .6rem}
+  .modal-actions{display:flex;gap:.6rem;margin-top:1.1rem}
+  .modal-actions .btn{flex:1;justify-content:center}
+  .errbar{position:fixed;left:0;right:0;bottom:0;z-index:90;background:#7a1f12;color:#fff;
+    padding:.7rem 1rem calc(.7rem + var(--safe-b));font-size:.82rem;line-height:1.4;display:none;align-items:flex-start;gap:.6rem}
+  .errbar.show{display:flex}
+  .errbar button{background:rgba(255,255,255,.2);color:#fff;border-radius:8px;padding:.3rem .6rem;flex:0 0 auto}
+
+  .progress{position:fixed;inset:0;background:rgba(20,28,38,.6);z-index:60;display:none;place-items:center;color:#fff;text-align:center}
+  .progress.open{display:grid}
+  .spinner{width:42px;height:42px;border:4px solid rgba(255,255,255,.3);border-top-color:#fff;border-radius:50%;animation:spin 1s linear infinite;margin:0 auto .8rem}
+  @keyframes spin{to{transform:rotate(360deg)}}
+</style>
+</head>
+<body>
+  <header>
+    <div class="title">Havainto&shy;kartta<small>Kuntotutkimus</small></div>
+    <div class="sitename" id="siteName">—</div>
+    <button class="hbtn" id="btnSites" title="Kohteet">☰</button>
+    <button class="hbtn" id="btnCats" title="Kategoriat">🎨</button>
+    <button class="hbtn" id="btnExport" title="Vie PDF">⤓</button>
+    <button class="hbtn" id="btnHelp" title="Ohje">?</button>
+  </header>
+
+  <div class="planbar" id="planbar"></div>
+
+  <div id="stage">
+    <div id="viewport">
+      <div id="world">
+        <img id="planImg" alt="pohjakuva" />
+        <div id="markerLayer"></div>
+      </div>
+    </div>
+    <div id="crosshair"><div class="ring"></div></div>
+
+    <div class="emptystate" id="emptyState">
+      <div class="inner">
+        <h2 id="emptyTitle">Ei kohdetta</h2>
+        <p id="emptyMsg" class="muted">Aloita luomalla kohde ja tuomalla pohjakuvat (PDF).</p>
+        <button class="btn btn-primary" id="emptyAction" style="margin-top:1rem">+ Uusi kohde</button>
+      </div>
+    </div>
+
+    <div class="zoomctl" id="zoomctl">
+      <button id="zoomIn">+</button>
+      <button id="zoomOut">−</button>
+      <button class="fit" id="zoomFit">SOVITA</button>
+    </div>
+
+    <button class="fab-list" id="fabList">Selitteet <span class="count" id="listCount">0</span></button>
+  </div>
+
+  <!-- Sheets -->
+  <div class="sheet-bg" id="sheetBg"></div>
+
+  <!-- Add / edit marker -->
+  <div class="sheet" id="markerSheet">
+    <div class="grab"></div>
+    <div class="body">
+      <h3 id="markerSheetTitle">Uusi merkintä</h3>
+      <label class="fld">Kategoria</label>
+      <div class="catgrid" id="catGrid"></div>
+      <label class="fld">Selite / havainnon kuvaus</label>
+      <textarea id="markerText" placeholder="Esim. Lattian ja seinän liitoksessa kosteusjälkiä, materiaalinäyte otettu…"></textarea>
+      <div class="muted" id="markerMeta" style="margin-top:.5rem"></div>
+      <div class="sheet-actions">
+        <button class="btn btn-ghost" id="markerMove">⊹ Siirrä</button>
+        <button class="btn btn-primary" id="markerSave">Tallenna</button>
+      </div>
+      <div class="sheet-actions" id="markerDeleteWrap" style="margin-top:.5rem">
+        <button class="btn btn-ghost" id="markerCancel">Peruuta</button>
+        <button class="btn" style="background:#fbe9e7;color:var(--danger);flex:1;justify-content:center" id="markerDelete">Poista</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Marker list -->
+  <div class="sheet" id="listSheet">
+    <div class="grab"></div>
+    <div class="body">
+      <h3>Selitteet</h3>
+      <div id="listContent"></div>
+    </div>
+  </div>
+
+  <!-- Sites -->
+  <div class="sheet" id="sitesSheet">
+    <div class="grab"></div>
+    <div class="body">
+      <h3>Kohteet</h3>
+      <div id="sitesList"></div>
+      <div class="sheet-actions"><button class="btn btn-primary" id="newSiteBtn" style="flex:1;justify-content:center">+ Uusi kohde</button></div>
+    </div>
+  </div>
+
+  <!-- Categories -->
+  <div class="sheet" id="catsSheet">
+    <div class="grab"></div>
+    <div class="body">
+      <h3>Kategoriat</h3>
+      <p class="muted">Etuliite + väri näkyvät pohjakuvassa ja selitteissä. Numerointi juoksee kohdekohtaisesti (H1, H2…).</p>
+      <div id="catsList"></div>
+      <div class="sheet-actions"><button class="btn btn-ghost" id="addCatBtn" style="flex:1;justify-content:center">+ Lisää kategoria</button></div>
+    </div>
+  </div>
+
+  <!-- Help -->
+  <div class="sheet" id="helpSheet">
+    <div class="grab"></div>
+    <div class="body help">
+      <h3>Ohje</h3>
+      <ol>
+        <li><b>Uusi kohde</b> ja <b>Tuo pohjat</b> (PDF, monisivuinen käy – jokainen sivu = oma välilehti).</li>
+        <li>Napauta pohjakuvaa → ristikko ilmestyy. Hienosäädä raahaamalla, valitse kategoria, kirjaa selite, <b>Tallenna</b>.</li>
+        <li>Nipistä zoomataksesi, raahaa yhdellä sormella liikkuaksesi.</li>
+        <li>Napauta merkintää muokataksesi tai poistaaksesi.</li>
+        <li><b>⤓ Vie PDF</b> tekee raportin: pohjat numeroituina + ryhmitellyt selitteet.</li>
+      </ol>
+      <div class="badge-tip"><b>Asenna kotinäkymään</b> (Jaa → Lisää kotinäyttöön / valikko → Asenna). Tällöin tiedot säilyvät luotettavasti ja työkalu toimii ilman verkkoa kentällä.</div>
+      <p class="muted">Tiedot tallentuvat <b>tähän selaimeen/laitteeseen</b>. Sama puhelin joka käynnillä → kartta jatkuu päivästä toiseen. Tee tärkeistä kohteista PDF-varmuuskopio käynnin päätteeksi.</p>
+      <p class="muted" id="storageStatus"></p>
+    </div>
+  </div>
+
+  <input type="file" id="fileInput" accept="application/pdf,image/*" multiple />
+
+  <div class="modal-bg" id="modalBg">
+    <div class="modal">
+      <h3 id="modalTitle"></h3>
+      <div id="modalFields"></div>
+      <p class="mmsg hidden" id="modalMsg"></p>
+      <div class="modal-actions">
+        <button class="btn btn-ghost" id="modalCancel">Peruuta</button>
+        <button class="btn btn-primary" id="modalOk">OK</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="errbar" id="errbar">
+    <div id="errmsg" style="flex:1"></div>
+    <button id="errClose">Sulje</button>
+  </div>
+
+  <div class="progress" id="progress"><div><div class="spinner"></div><div id="progressMsg">Käsitellään…</div></div></div>
+
+  <script src="vendor/jspdf.umd.min.js"></script>
+  <script type="module" src="app.js"></script>
+</body>
+</html>
